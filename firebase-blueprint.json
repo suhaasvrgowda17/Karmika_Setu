@@ -1,0 +1,188 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Information about the laborer/user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "aadhaarMasked": { "type": "string" },
+        "totalDaysWorked": { "type": "number" },
+        "totalEarnings": { "type": "number" },
+        "preferredLanguage": { "type": "string", "enum": ["en", "hi", "kn", "ta"] },
+        "role": { "type": "string", "enum": ["worker"] },
+        "setuId": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "isVerified": { "type": "boolean" }
+      },
+      "required": ["uid", "name", "phone", "email", "address", "totalDaysWorked", "totalEarnings", "preferredLanguage", "role", "setuId"]
+    },
+    "ContractorProfile": {
+      "title": "Contractor Profile",
+      "description": "Details for contractors with identity verification",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "companyName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "aadhaarMasked": { "type": "string" },
+        "address": { "type": "string" },
+        "role": { "type": "string", "enum": ["contractor"] },
+        "setuId": { "type": "string" }
+      },
+      "required": ["uid", "name", "email", "phone", "address", "role", "setuId"]
+    },
+    "OrganizationProfile": {
+      "title": "Organization Profile",
+      "description": "Information about the organization",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "orgName": { "type": "string" },
+        "contactPerson": { "type": "string" },
+        "email": { "type": "string" },
+        "orgType": { "type": "string" },
+        "address": { "type": "string" },
+        "role": { "type": "string", "enum": ["organization"] },
+        "setuId": { "type": "string" },
+        "shortlist": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["uid", "orgName", "contactPerson", "email", "orgType", "address", "role", "setuId"]
+    },
+    "WorkEntry": {
+      "title": "Work Entry",
+      "description": "Details of a specific work activity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "date": { "type": "string" },
+        "category": { "type": "string" },
+        "workType": { "type": "string" },
+        "location": { "type": "string" },
+        "contractorName": { "type": "string" },
+        "contractorId": { "type": "string" },
+        "hoursWorked": { "type": "number" },
+        "paymentReceived": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["Pending", "Paid"] },
+        "voiceNoteUrl": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "verified", "rejected"] }
+      },
+      "required": ["id", "userId", "date", "category", "workType", "location", "hoursWorked", "paymentReceived", "paymentStatus", "createdAt"]
+    },
+    "VerificationRequest": {
+      "title": "Verification Request",
+      "description": "A request sent to a contractor to verify work",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workerId": { "type": "string" },
+        "workerName": { "type": "string" },
+        "entryId": { "type": "string" },
+        "date": { "type": "string" },
+        "workType": { "type": "string" },
+        "hours": { "type": "number" },
+        "contractorId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "verified", "rejected"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "workerId", "workerName", "entryId", "date", "workType", "hours", "contractorId", "status", "createdAt"]
+    },
+    "HireRequest": {
+      "title": "Hire Request",
+      "description": "A request from a contractor to hire a worker",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "contractorId": { "type": "string" },
+        "workerId": { "type": "string" },
+        "workerName": { "type": "string" },
+        "contractorName": { "type": "string" },
+        "contractorPhone": { "type": "string" },
+        "contractorLocation": { "type": "string" },
+        "jobTitle": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "contractorId", "workerId", "status", "createdAt"]
+    },
+    "GlobalStats": {
+      "title": "Global Stats",
+      "description": "System-wide metrics",
+      "type": "object",
+      "properties": {
+        "totalWorkers": { "type": "number" }
+      },
+      "required": ["totalWorkers"]
+    },
+    "JobListing": {
+      "title": "Job Listing",
+      "description": "Work opportunities posted by contractors",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "contractorId": { "type": "string" },
+        "contractorName": { "type": "string" },
+        "contractorPhone": { "type": "string" },
+        "contractorLocation": { "type": "string" },
+        "title": { "type": "string" },
+        "location": { "type": "string" },
+        "dailyWage": { "type": "number" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "closed"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "contractorId", "contractorName", "title", "location", "dailyWage", "category", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document"
+    },
+    "/users/{userId}/workEntries/{entryId}": {
+      "schema": "WorkEntry",
+      "description": "Sub-collection of work entries for a user"
+    },
+    "/verifications/{verificationId}": {
+      "schema": "VerificationRequest",
+      "description": "Requests for work verification sent to contractors"
+    },
+    "/hireRequests/{requestId}": {
+      "schema": "HireRequest",
+      "description": "Direct hire requests from contractors to workers"
+    },
+    "/jobListings/{jobId}": {
+      "schema": "JobListing",
+      "description": "Public job postings"
+    },
+    "/system/stats": {
+      "schema": "GlobalStats",
+      "description": "Global counters for workers"
+    },
+    "/test/connection": {
+      "schema": { "type": "object", "properties": {}, "title": "Connection Test" },
+      "description": "Healthcheck document"
+    },
+    "/uniques/emails/entries/{email}": {
+      "schema": { "type": "object", "properties": { "userId": { "type": "string" } }, "title": "Unique Email" },
+      "description": "Enforce unique emails"
+    },
+    "/uniques/phones/entries/{phone}": {
+      "schema": { "type": "object", "properties": { "userId": { "type": "string" } }, "title": "Unique Phone" },
+      "description": "Enforce unique phones"
+    },
+    "/uniques/aadhaars/entries/{aadhaar}": {
+      "schema": { "type": "object", "properties": { "userId": { "type": "string" } }, "title": "Unique Aadhaar" },
+      "description": "Enforce unique Aadhaar numbers"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Karmik Setu",
+  "description": "A digital professional record and income verification ecosystem for India\u0027s workforce, providing verified identities and credit intelligence for workers, contractors, and organizations.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": []
+}

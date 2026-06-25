@@ -1,0 +1,246 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny ALL
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Public test documents
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOrganization() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'organization';
+    }
+
+    function isContractor() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'contractor';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Global Stats ---
+    match /system/stats {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn(); 
+    }
+
+    // --- Uniqueness Enforcement ---
+    match /uniques/emails/entries/{email} {
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update: if isSignedIn() && (existing().userId == request.auth.uid || incoming().userId == request.auth.uid);
+    }
+
+    match /uniques/phones/entries/{phone} {
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && phone.matches('^[0-9]{10}$');
+      allow update: if isSignedIn() && (existing().userId == request.auth.uid || incoming().userId == request.auth.uid);
+    }
+
+    match /uniques/aadhaars/entries/{aadhaar} {
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && aadhaar.matches('^[0-9]{12}$');
+      allow update: if isSignedIn() && (existing().userId == request.auth.uid || incoming().userId == request.auth.uid);
+    }
+
+    match /uniques/setuIds/entries/{setuId} {
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && setuId.matches('^SS-[A-Z0-9-]+$');
+      allow update: if isSignedIn() && (existing().userId == request.auth.uid || incoming().userId == request.auth.uid);
+    }
+
+    match /uniques/pradhanIds/entries/{pradhanId} {
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && pradhanId.matches('^SS-PR-[A-Z0-9-]+$');
+      allow update: if isSignedIn() && (existing().userId == request.auth.uid || incoming().userId == request.auth.uid);
+    }
+
+    // --- UserProfile, OrganizationProfile & ContractorProfile ---
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.get('role', '') == 'worker'
+          && data.get('uid', '') == request.auth.uid
+          && data.get('name', '') is string
+          && data.get('phone', '') is string
+          && data.get('email', '') is string;
+      }
+
+      function isValidOrg(data) {
+        return data.get('role', '') == 'organization'
+          && data.get('uid', '') == request.auth.uid
+          && data.get('orgName', '') is string
+          && data.get('email', '') is string;
+      }
+
+      function isValidContractor(data) {
+        return data.get('role', '') == 'contractor'
+          && data.get('uid', '') == request.auth.uid
+          && data.get('name', '') is string
+          && data.get('email', '') is string;
+      }
+
+      allow get: if (isOwner(userId) || isOrganization() || isContractor()) && isValidId(userId);
+      allow list: if isSignedIn(); 
+      
+      allow create: if isOwner(userId) && isValidId(userId) 
+        && (
+          isValidUser(incoming()) || 
+          isValidOrg(incoming()) ||
+          isValidContractor(incoming())
+        );
+        
+      allow update: if isValidId(userId) && (
+        isOwner(userId) ? (
+          (existing().role == 'worker' && isValidUser(incoming())) ||
+          (existing().role == 'organization' && isValidOrg(incoming())) ||
+          (existing().role == 'contractor' && isValidContractor(incoming()))
+        ) : (
+          // Partial update by Contractor/Organization (stats only)
+          (isContractor() || isOrganization())
+          && existing().role == 'worker'
+          && incoming().diff(existing()).affectedKeys().hasOnly(['totalDaysWorked', 'totalEarnings'])
+          && incoming().uid == existing().uid
+          && incoming().role == existing().role
+          && incoming().totalDaysWorked is number
+          && incoming().totalEarnings is number
+        )
+      );
+    }
+
+    // --- Job Listings ---
+    match /jobListings/{jobId} {
+      function isValidJob(data) {
+        return data.keys().hasAll(['id', 'contractorId', 'contractorName', 'title', 'location', 'dailyWage', 'category', 'status', 'createdAt'])
+          && data.id == jobId
+          && data.contractorId == request.auth.uid
+          && data.contractorName is string
+          && data.title is string && data.title.size() <= 200
+          && data.location is string && data.location.size() <= 500
+          && data.dailyWage is number && data.dailyWage >= 0
+          && data.category is string
+          && data.status in ['active', 'closed']
+          && data.createdAt is number;
+      }
+
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if (isContractor() || isOrganization()) && isValidJob(incoming());
+      allow update: if isSignedIn() && resource.data.contractorId == request.auth.uid 
+        && (
+          (incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
+          (isValidJob(incoming()))
+        );
+      allow delete: if isSignedIn() && resource.data.contractorId == request.auth.uid;
+    }
+
+    // --- WorkEntry ---
+    match /users/{userId}/workEntries/{entryId} {
+      function isValidWorkEntry(data) {
+        return data.keys().hasAll(['id', 'userId', 'date', 'category', 'workType', 'location', 'hoursWorked', 'paymentReceived', 'paymentStatus', 'createdAt'])
+          && data.userId == userId
+          && data.id == entryId
+          && data.date is string && data.date.size() <= 60
+          && data.category is string && data.category.size() <= 100
+          && data.workType is string && data.workType.size() <= 200
+          && data.location is string && data.location.size() <= 500
+          && data.hoursWorked is number && data.hoursWorked >= 0
+          && data.paymentReceived is number && data.paymentReceived >= 0
+          && data.paymentStatus in ['Pending', 'Paid']
+          && (data.get('status', 'verified') in ['pending', 'verified', 'rejected'])
+          && (data.get('contractorId', '') is string)
+          && data.createdAt is number;
+      }
+
+      allow list: if isOwner(userId) || isOrganization() || isContractor();
+      allow get: if (isOwner(userId) || isOrganization() || isContractor()) && isValidId(userId) && isValidId(entryId);
+      allow create: if isOwner(userId) && isValidId(userId) && isValidId(entryId) && isValidWorkEntry(incoming());
+      allow update: if (isOwner(userId) || isContractor() || isOrganization()) && isValidId(userId) && isValidId(entryId) && isValidWorkEntry(incoming())
+        && incoming().id == existing().id
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt;
+      allow delete: if isOwner(userId) && isValidId(userId) && isValidId(entryId);
+    }
+
+    // --- Hire Requests ---
+    match /hireRequests/{requestId} {
+      function isValidHireRequest(data) {
+        return data.keys().hasAll(['id', 'contractorId', 'workerId', 'status', 'createdAt', 'workerName', 'contractorName', 'contractorPhone', 'contractorLocation', 'jobTitle'])
+          && data.id == requestId
+          && data.contractorId == request.auth.uid
+          && data.workerId is string
+          && data.status == 'pending'
+          && data.workerName is string
+          && data.contractorName is string
+          && data.contractorPhone is string
+          && data.contractorLocation is string
+          && data.jobTitle is string
+          && data.createdAt is number;
+      }
+
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(requestId) && isValidHireRequest(incoming());
+      allow update: if isSignedIn() 
+        && (request.auth.uid == existing().contractorId || request.auth.uid == existing().workerId)
+        && (
+          // Worker accepting/declining
+          (request.auth.uid == existing().workerId && incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
+          // Contractor cancelling (only if still pending)
+          (request.auth.uid == existing().contractorId && existing().status == 'pending' && incoming().diff(existing()).affectedKeys().hasOnly(['status']))
+        );
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.contractorId;
+    }
+
+    // --- Verifications ---
+    match /verifications/{verificationId} {
+      function isValidVerification(data) {
+        return data.keys().hasAll(['id', 'workerId', 'workerName', 'entryId', 'date', 'workType', 'hours', 'contractorId', 'status', 'createdAt'])
+          && data.id == verificationId
+          && data.workerId is string
+          && data.workerName is string
+          && data.entryId is string
+          && data.date is string
+          && data.workType is string
+          && data.hours is number
+          && data.contractorId is string
+          && data.status in ['pending', 'verified', 'rejected']
+          && data.createdAt is number;
+      }
+
+      allow list: if isSignedIn(); // We filter by contractorId or workerId in code
+      allow get: if isSignedIn() && (request.auth.uid == resource.data.contractorId || request.auth.uid == resource.data.workerId);
+      allow create: if isSignedIn() && request.auth.uid == incoming().workerId && isValidVerification(incoming());
+      allow update: if isSignedIn() 
+        && (request.auth.uid == existing().contractorId) 
+        && incoming().status in ['verified', 'rejected']
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if false;
+    }
+  }
+}
